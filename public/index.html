@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Magnet → Torrent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0f0f13;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #e2e2e2;
+    }
+
+    .card {
+      width: min(520px, 94vw);
+      background: #1a1a22;
+      border: 1px solid #2e2e3a;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 8px 48px rgba(0,0,0,.5);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: 2rem;
+    }
+
+    .logo svg { flex-shrink: 0; }
+
+    .logo h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -.01em;
+    }
+
+    .logo span { color: #7c6fcd; }
+
+    label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 500;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: .5rem;
+    }
+
+    textarea {
+      width: 100%;
+      height: 108px;
+      resize: vertical;
+      background: #111118;
+      border: 1px solid #2e2e3a;
+      border-radius: 10px;
+      color: #e2e2e2;
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: .82rem;
+      line-height: 1.5;
+      padding: .75rem 1rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    textarea:focus { border-color: #7c6fcd; }
+    textarea::placeholder { color: #444; }
+
+    .btn {
+      margin-top: 1.25rem;
+      width: 100%;
+      padding: .85rem 1rem;
+      background: #7c6fcd;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, opacity .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+    }
+
+    .btn:hover:not(:disabled) { background: #6a5eb8; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .status {
+      margin-top: 1.25rem;
+      padding: .85rem 1rem;
+      border-radius: 10px;
+      font-size: .88rem;
+      line-height: 1.5;
+      display: none;
+    }
+
+    .status.info    { background: #1c1c30; border: 1px solid #3a3a60; color: #a0a0d0; }
+    .status.success { background: #0d2218; border: 1px solid #1a5c3a; color: #5cdb95; }
+    .status.error   { background: #220d0d; border: 1px solid #5c1a1a; color: #db5c5c; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hint {
+      margin-top: 1.5rem;
+      font-size: .75rem;
+      color: #444;
+      line-height: 1.6;
+    }
+
+    .hint a { color: #7c6fcd; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#7c6fcd" opacity=".15"/>
+        <path d="M16 7v10M16 7l-4 4M16 7l4 4" stroke="#7c6fcd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M8 21h16" stroke="#7c6fcd" stroke-width="2" stroke-linecap="round"/>
+        <path d="M10 25h12" stroke="#7c6fcd" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+      </svg>
+      <h1>Magnet <span>→</span> Torrent</h1>
+    </div>
+
+    <label for="magnet">Magnet link</label>
+    <textarea
+      id="magnet"
+      placeholder="magnet:?xt=urn:btih:..."
+      spellcheck="false"
+      autocomplete="off"
+    ></textarea>
+
+    <button class="btn" id="convertBtn" onclick="convert()">
+      <span class="spinner" id="spinner"></span>
+      <span id="btnText">Convertir y descargar</span>
+    </button>
+
+    <div class="status" id="status"></div>
+
+    <p class="hint">
+      El servidor se conecta a la red DHT de BitTorrent para obtener el metadata
+      del torrent y generar el archivo <code>.torrent</code>.<br>
+      Puede tardar unos segundos según la popularidad del torrent.
+    </p>
+  </div>
+
+  <script>
+    const magnetInput = document.getElementById('magnet');
+    const btn         = document.getElementById('convertBtn');
+    const spinner     = document.getElementById('spinner');
+    const btnText     = document.getElementById('btnText');
+    const statusBox   = document.getElementById('status');
+
+    function showStatus(msg, type) {
+      statusBox.textContent = msg;
+      statusBox.className = `status ${type}`;
+      statusBox.style.display = 'block';
+    }
+
+    function setLoading(loading) {
+      btn.disabled     = loading;
+      spinner.style.display = loading ? 'block' : 'none';
+      btnText.textContent   = loading ? 'Buscando metadata…' : 'Convertir y descargar';
+    }
+
+    async function convert() {
+      const magnet = magnetInput.value.trim();
+
+      if (!magnet) {
+        showStatus('Pegá un magnet link primero.', 'error');
+        return;
+      }
+      if (!magnet.startsWith('magnet:')) {
+        showStatus('El link debe comenzar con "magnet:".', 'error');
+        return;
+      }
+
+      setLoading(true);
+      showStatus('Conectándose a la red DHT… esto puede tardar hasta 60 segundos.', 'info');
+
+      try {
+        const res = await fetch('/api/convert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ magnet }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `Error ${res.status}` }));
+          showStatus(err.error || `Error ${res.status}`, 'error');
+          return;
+        }
+
+        // Get suggested filename from Content-Disposition header
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? decodeURIComponent(match[1]) : 'torrent.torrent';
+
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        showStatus(`Descargado: ${filename}`, 'success');
+      } catch (err) {
+        showStatus(`Error de red: ${err.message}`, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Allow Ctrl+Enter to submit
+    magnetInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) convert();
+    });
+  </script>
+</body>
+</html>

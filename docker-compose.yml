@@ -1,0 +1,8 @@
+services:
+  torrent-converter:
+    build: .
+    image: torrent-converter:latest
+    container_name: torrent-converter
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
