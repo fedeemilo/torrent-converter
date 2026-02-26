@@ -20,6 +20,6 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY server.js .
 COPY public/ ./public/
 
-EXPOSE 3000
+EXPOSE 3014
 
 CMD ["node", "server.js"]
